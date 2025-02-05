@@ -1,1 +1,324 @@
+Харківський національний університет радіоелектроніки
+
+Кафедра програмної інженерії
+
+
+
+
+
+
+Звіт
+З Практичної роботи № 1.
+«Правила оформлення коду для мови програмування Swift»
+з дисципліни «Аналіз та Рефакторинг коду» 
+
+
+
+
+
+
+
+Виконав:                ст. гр. ПЗПІ 22-10  Заболотний Д.М.		Перевірив:
+Сокорчук І. П.
+
+
+
+
+
+
+Харків 2024
+Мета:
+Ознайомитись з основними рекомендаціями щодо написання чистого, ефективного та підтримуваного коду для різних мов програмування, а також навчитись аналізувати та рефакторити код для покращення його якості.
+
+Swift – це сучасна мова програмування, яку активно використовують для розробки додатків під iOS, macOS та інші платформи Apple. Ця мова надає можливість писати безпечний і продуктивний код завдяки таким особливостям, як опціонали, строгий контроль типів та інші засоби, що сприяють уникненню типових помилок. 
+Чому важливе дотримання правил оформлення коду? Насамперед, у великих проектах, де над одним кодом працює багато розробників, стандартизація стилю забезпечує легкість спільного використання та підтримки коду. Також, це допомагає уникнути помилок, пов’язаних з неузгодженістю стилю, та полегшує процес онбордингу нових членів команди
+
+1. Стильові рекомендації
+Коли мова заходить про стиль оформлення коду, важливо встановити єдині правила, яких буде дотримуватися кожен член команди. Наприклад, рекомендується використовувати відступи, що складаються з 4 пробілів. Дужки при оголошенні функцій або умовних операторів повинні відкриватися на тій же лінії, що і вираз, що робить код більш лаконічним і легким для сприйняття. Також варто завжди ставити пробіли навколо операторів. 
+Такі дрібниці сприяють єдиному вигляду коду у всьому проекті, знижуючи когнітивне навантаження і спрощуючи автоматичне форматування за допомогою інструментів типу SwiftFormat
+На прикладі можна побачити, наскількі важливо дотримуватися базових правил стильового оформлення коду
+// Гарний приклад
+func fetchUserProfile(with id: Int) -> UserProfile? {
+    guard let url = URL(string: "https://api.example.com/users/\(id)") else { return nil }
+    do {
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        return try decoder.decode(UserProfile.self, from: data)
+    } catch {
+        print("Error: \(error)")
+        return nil
+    }
+}
+// Поганий приклад
+func fetchUserProfile(with id:Int)->UserProfile?{
+guard let url=URL(string:"https://api.example.com/users/\(id)") else{return nil}
+do{
+let data=try Data (contentsOf:url)
+let decoder=JSONDecoder()
+return try decoder.decode (UserProfile.self, from:data)
+}catch{print("Error:\(error)"); return nil}
+}
+
+2. Правила іменування
+Іменування елементів коду – це не просто формальність, а ключовий елемент, що впливає на читабельність та зрозумілість програми. В Swift для змінних та функцій прийнято використовувати camelCase, можна побачити на гарному прикладі: parseUserResponse. 
+// Гарний приклад
+func parseUserResponse(_ response: HTTPURLResponse, data: Data) -> Result<User, Error> {
+    guard response.statusCode == 200 else { return .failure(NetworkError.invalidResponse) }
+
+    let decoder = JSONDecoder()
+    do {
+        let user = try decoder.decode(User.self, from: data)
+        return .success(user)
+    } catch {
+        return .failure(NetworkError.decodingError)
+    }
+}
+// Поганий приклад
+func prsrsp(_ resp: HTTPURLResponse, d: Data) -> Result<User, Error> {
+    guard resp.statusCode == 200 else { return .failure(NetworkError.invalidResponse) }
+
+    let dcr = JSONDecoder()
+    do {
+        let usr = try dcr.decode(User.self, from: d)
+        return .success(usr)
+    } catch {
+        return .failure(NetworkError.decodingError)
+    }
+}
+
+Класи та структури, навпаки, повинні бути в PascalCase, як NetworkError, щоб відразу підкреслювати їхню сутність. 
+А константи часто оформлюють великими літерами із використанням підкреслення. 
+Вибір зрозумілих і описових назв допомагає уникнути плутанини, наприклад, замість короткого usr краще використовувати user. Це забезпечує однозначне розуміння призначення кожного елемента коду і знижує ризик помилок, пов’язаних із неоднозначними назвами
+
+3. Структура коду
+Структурування коду є ще одним важливим аспектом, який допомагає впорядкувати велику кількість рядків і забезпечити легку навігацію всередині проекту. Рекомендується розділяти код на логічні блоки, використовуючи спеціальні мітки, наприклад, // MARK: -, що дозволяє швидко знаходити потрібні ділянки коду. Також корисно розбивати великі класи на розширення (extension), особливо якщо клас реалізує кілька протоколів. Це дозволяє уникнути створення класів-богів з тисячами рядків і робить файл більш організованим, що в свою чергу спрощує роботу з кодом для всієї команди
+Хороший приклад (див. Додаток А) використовує MARK для логічного розділення секцій коду та винесення реалізації протоколу в розширення, що підвищує читабельність і підтримку.
+Поганий приклад об'єднує всю логіку в одному класі без структурованого розбиття, що ускладнює навігацію і розуміння коду.
+
+4. Рефакторинг
+Рефакторинг – це процес покращення внутрішньої структури коду без зміни його зовнішньої поведінки. У цьому контексті важливо уникати дублювання коду – принцип DRY (Don't Repeat Yourself) допомагає зробити програму більш узгодженою та легкою для підтримки. Кожна функція повинна бути як можна коротшою, бажано не перевищувати 10-15 рядків, щоб її було легше тестувати і модифікувати. Наприклад, замість того, щоб писати одну велику функцію з 20 рядками логіки, краще розбити її на декілька менших функцій, кожна з яких відповідає за окреме завдання. Це не лише підвищує читабельність, а й сприяє більшому повторному використанню коду
+// Гарний приклад
+func processOrder(_ order: Order) {
+    validate(order)
+    let total = calculateTotal(for: order)
+    sendConfirmation(total: total)
+}
+
+private func calculateTotal(for order: Order) -> Double {
+    order.amount * (1 - calculateDiscount(for: order))
+}
+// Поганий приклад
+func processOrder(_ order: Order) {
+    validate(order)
+    let discount = order.isVIP ? 0.1 : 0.0
+    let total = order.amount * (1 - discount)
+    sendConfirmation(total: total)
+
+    if order.isVIP {
+        let newDiscount = 0.1
+        print("VIP Discount: \(newDiscount)")
+    }
+}
+
+Хороший приклад дотримується принципу DRY, винісши обчислення загальної суми в окрему функцію і тим самим уникаючи дублювання логіки.
+Поганий приклад містить повторне визначення знижки і змішує різні відповідальності, що робить код менш гнучким і складнішим для підтримки.
+
+5. Оптимізація продуктивності
+Оптимізація коду – це ключ до підвищення продуктивності додатку. Одним із підходів є використання властивості lazy для відкладеної ініціалізації об’єктів, що потребують значних ресурсів. Це дозволяє ініціалізувати об’єкт лише в момент першого доступу до нього, а не при кожному зверненні, що є ефективним способом зменшення навантаження на систему. Крім того, важливо уникати непотрібних операцій у циклах, адже навіть невелика неефективність у великій кількості ітерацій може суттєво вплинути на швидкодію додатку
+У гарному прикладі (див. Додаток А) використовується lazy для створення контексту лише при першому зверненні, що економить ресурси. 
+У поганому прикладі CIContext створюється щоразу, що може негативно вплинути на продуктивність.
+
+6. Обробка помилок
+Обробка помилок є критично важливою для стабільності роботи додатку. У Swift для цього широко використовується конструкція do-try-catch, яка дозволяє явно обробляти можливі винятки. Застосування конструкцій типу try! або try? може призвести до крашів, якщо помилка не буде належним чином опрацьована. Тому завжди варто передбачати можливість виникнення помилок і вміти коректно їх обробляти, щоб користувач не зіштовхнувся з аварійним завершенням роботи програми. Це особливо важливо при роботі з критично важливими операціями, наприклад, при завантаженні файлів або отриманні даних з мережі
+// Гарний приклад
+func fetchUserProfile(with id: Int) -> UserProfile? {
+    guard let url = URL(string: "https://api.example.com/users/\(id)") else { return nil }
+    do {
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        return try decoder.decode(UserProfile.self, from: data)
+    } catch {
+        print("Error: \(error)")
+        return nil
+    }
+}
+// Поганий приклад
+func fetchUserProfile(with id: Int) -> UserProfile? {
+    guard let url = URL(string: "https://api.example.com/users/\(id)") else { return nil }
+    let data = try! Data(contentsOf: url)
+    let decoder = JSONDecoder()
+    return try? decoder.decode(UserProfile.self, from: data)
+}
+У хорошому прикладі ми коректно обробляємо можливі помилки через блок do-try-catch.
+А в поганому прикладі застосовано try! і try?, що може призвести до неочікуваного завершення програми або приховування помилок.
+
+7. Парадигми програмування
+Swift дозволяє застосовувати різні парадигми програмування, що відкриває великі можливості для написання гнучкого і зрозумілого коду. Однією з таких парадигм є протокольно-орієнтований підхід (POP), який дозволяє досягти високої гнучкості без необхідності використання множинного наслідування. Також варто використовувати функціональні методи роботи з колекціями, такі як map, filter та reduce, що роблять код лаконічнішим та зручним для обробки даних. Ці підходи сприяють створенню коду, який легко розширювати і підтримувати, знижуючи ризик помилок, пов’язаних з складною логікою.»
+Хороший приклад (див. Додаток А) використовує лаконічний функціональний стиль із filter та map, що робить код компактним і зрозумілим. 
+Поганий приклад використовує імперативний стиль із ручним циклом, що збільшує складність коду.
+
+8. Використання guard
+Конструкція guard є потужним інструментом для забезпечення чистоти коду. Вона дозволяє виконувати ранній вихід з функції, якщо певна умова не виконана, що знижує кількість вкладених умовних операторів і допомагає уникнути так званої «піраміди смерті». Використовуючи guard, ми змушуємо себе обов’язково обробити випадки, коли дані можуть бути недоступними або некоректними, що робить код більш надійним і легким для читання. Таким чином, замість того, щоб вкладати декілька умовних операторів if-let, краще відразу перевірити необхідні умови і вийти з функції, якщо вони не виконані
+// Гарний приклад
+func configureUserProfile(with user: User?) {
+    guard let user = user,
+          let email = user.email,
+          !email.isEmpty
+    else {
+        print("Невірні дані користувача")
+        return
+    }
+    print("Конфігурація профілю для \(user.name) (\(email))")
+}
+// Поганий приклад
+func configureUserProfile(with user: User?) {
+    if let user = user {
+        if let email = user.email {
+            if !email.isEmpty {
+                print("Конфігурація профілю для \(user.name) (\(email))")
+            } else {
+                print("Невірні дані користувача")
+            }
+        } else {
+            print("Невірні дані користувача")
+        }
+    } else {
+        print("Невірні дані користувача")
+    }
+}
+Використання guard у хорошому прикладі дозволяє одразу вийти з функції у випадку невідповідних умов, що зменшує вкладеність. 
+Поганий приклад має численні вкладені умовні конструкції, що ускладнюють читання та підтримку коду.
+
+9. Безпечна робота з опціоналами
+Однією з основних особливостей Swift є опціонали, які дозволяють безпечно працювати з можливими відсутніми значеннями. Проте використання примусового розпакування опціоналів за допомогою символу ! може призвести до крашів, якщо значення відсутнє. Тому замість цього краще використовувати конструкції if-let або guard-let, що дозволяють безпечно розпаковувати опціонали. Також оператор nil-коалесценції (??) дозволяє задати значення за замовчуванням, що допомагає уникнути неочікуваних станів і забезпечує стабільність роботи додатку
+// Гарний приклад
+func getUserDisplayName(for user: User?) -> String {
+    guard let user = user, let name = user.name, !name.isEmpty else {
+        return "Guest"
+    }
+    return name.capitalized
+}
+
+// Поганий приклад
+func getUserDisplayName(for user: User?) -> String {
+    let name = user!.name!
+    return name.capitalized
+}
+Гарний приклад безпечно перевіряє опціональні значення, використовуючи guard, і повертає значення за замовчуванням у випадку невдачі. 
+Поганий приклад використовує примусове розпакування, що є небезпечним і може призвести до runtime-помилок.
+
+Висновоки
+Підбиваючи підсумки, можна сказати, що дотримання правил оформлення коду в Swift не лише робить його «красивішим», але і значно підвищує ефективність його розробки та підтримки. Чіткі конвенції сприяють зменшенню технічного боргу, полегшують розуміння коду новими членами команди і сприяють створенню масштабованих проектів. Для автоматизації перевірки стилю існують інструменти, такі як SwiftLint, а також варто ознайомитися з офіційними Swift API Design Guidelines, які допомагають зробити код більш зрозумілим та інтуїтивним.
+Відео презентація: https://youtu.be/c9NuvMsG17A
+
+Додаток А. 
+Приклад коду до рекомендацій стосовно структури коду.
+// Гарний приклад
+class ProfileViewController: UIViewController {
+    // MARK: - Properties
+
+    private let tableView = UITableView()
+
+    // MARK: - Lifecycle
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        configureTableView()
+    }
+}
+
+// MARK: - UITableViewDataSource
+extension ProfileViewController: UITableViewDataSource {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        10
+    }
+}
+// Поганий приклад
+class ProfileViewController: UIViewController, UITableViewDataSource {
+    private let tableView = UITableView()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        tableView.dataSource = self
+    }
+
+    func tableView(tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        10
+    }
+
+    private func someUnrelatedMethod() { }
+}
+
+Приклад коду до рекомендацій стосовно оптимізації продуктивності.
+// Гарний приклад
+class ImageProcessor {
+    lazy var ciContext: CIContext = {
+        CIContext(options: nil)
+    }()
+    
+    func process(image: UIImage) -> UIImage? {
+        guard let ciImage = CIImage(image: image),
+              let filter = CIFilter(name: "CISepiaTone") else { return nil }
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(0.8, forKey: kCIInputIntensityKey)
+        guard let outputImage = filter.outputImage,
+              let cgImage = ciContext.createCGImage(outputImage, from: outputImage.extent)
+        else { return nil }
+        return UIImage(cgImage: cgImage)
+    }
+}
+// Поганий приклад
+class ImageProcessor {
+    func process(image: UIImage) -> UIImage? {
+        let context = CIContext(options: nil)
+        
+        guard let ciImage = CIImage(image: image),
+              let filter = CIFilter(name: "CISepiaTone") else { return nil }
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(0.8, forKey: kCIInputIntensityKey)
+        guard let outputImage = filter.outputImage,
+              let cgImage = context.createCGImage(outputImage, from: outputImage.extent)
+        else { return nil }
+        return UIImage(cgImage: cgImage)
+    }
+}
+
+Приклад коду до рекомендацій стосовно парадигм програмування.
+// Гарний приклад
+struct User {
+    let id: Int
+    let name: String
+    let isActive: Bool
+}
+
+struct UserViewModel {
+    let displayName: String
+}
+
+func createUserViewModels(from users: [User]) -> [UserViewModel] {
+    return users.filter { $0.isActive }
+        .map { UserViewModel(displayName: $0.name.capitalized) }
+}
+// Поганий приклад
+struct User {
+    let id: Int
+    let name: String
+    let isActive: Bool
+}
+
+struct UserViewModel {
+    let displayName: String
+}
+
+func createUserViewModels(from users: [User]) -> [UserViewModel] {
+    var viewModels = [UserViewModel]()
+    for user in users {
+        if user.isActive {
+            let vm = UserViewModel(displayName: user.name)
+            viewModels.append(vm)
+        }
+    }
+    return viewModels
+}
+
+Додаток Б. Презентація.
 
