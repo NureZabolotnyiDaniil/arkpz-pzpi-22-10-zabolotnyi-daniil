@@ -1,1 +1,283 @@
+Харківський національний університет радіоелектроніки
+
+Кафедра програмної інженерії
+
+
+
+
+
+
+Звіт
+З Лабораторної роботи № 3.
+«Розробка бізнес-логіки та функцій адміністрування серверної частини програмної системи»
+з дисципліни «Аналіз та Рефакторинг коду» 
+
+
+
+
+
+
+Виконав:                ст. гр. ПЗПІ 22-10  Заболотний Д.М.		Перевірив:
+Дашенков Д. С.
+
+
+
+
+
+
+Харків 2024
+1. Інженерні рішення
+У проєкті для управління адміністраторами використовується сучасний механізм аутентифікації та авторизації на базі JWT-токенів, що забезпечує безпечний доступ до системи. При реєстрації користувача перевіряється унікальність електронної пошти – якщо в базі даних вже існує користувач із зазначеною поштою, повертається помилка «Email already registered». Це гарантує, що кожен адміністратор має унікальний логін для входу в систему.
+Паролі користувачів шифруються за допомогою алгоритму bcrypt, що реалізовано через бібліотеку PassLib. Такий підхід дозволяє безпечно зберігати конфіденційні дані, оскільки навіть у випадку витоку даних зашифровані паролі важко розшифрувати. При спробі аутентифікації вхідний пароль порівнюється з зашифрованою версією у базі даних за допомогою спеціальної функції перевірки.
+Під час аутентифікації користувача здійснюється кілька перевірок:
+1.	Перевірка наявності електронної пошти: Система шукає користувача за вказаною електронною поштою. Якщо користувача не знайдено, повертається повідомлення «User with this email not found».
+2.	Перевірка статусу облікового запису: Якщо статус адміністратора не активний, видається повідомлення, що обліковий запис не активовано та потрібно дочекатися активації.
+3.	Перевірка пароля: За допомогою функції перевірки порівнюється вхідний пароль із збереженим зашифрованим паролем. Якщо паролі не співпадають, повертається помилка «Incorrect password».
+Після успішної аутентифікації формується JWT-токен, який містить інформацію про користувача (наприклад, його електронну пошту) і встановлює термін дії токена (за замовчуванням 30 хвилин). Токен генерується із використанням секретного ключа та алгоритму HS256, що гарантує його безпечність і неможливість підробки.
+
+ 
+2. Діаграма діяльності серверної частини
+ 
+Рисунок 2.1 – Діаграма діяльності реєстрації
+ 
+Рисунок 2.2 – Діаграма діяльності авторизації
+
+ 
+3. Діаграма взаємодії серверної частини
+
+ 
+Рисунок 3.1 – Діаграма взаємодії реєстрації
+ 
+Рисунок 3.2 – Діаграма взаємодії авторизації
+
+Відео-звіт: https://youtu.be/lSMu9Y0vSrA
+
+Додаток А
+Код формування запису у таблицю statistics_hourly кожну годину
+DECLARE
+    park_ids integer[];  
+    current_park_id integer;
+BEGIN
+    -- Сбор ID парков с обновленными фонарями
+    SELECT array_agg(DISTINCT l.park_id) INTO park_ids
+    FROM lanterns l
+    WHERE l.is_updated = TRUE;
+
+    -- Уведомления о пропущенных парках
+    IF park_ids IS NOT NULL THEN
+        FOREACH current_park_id IN ARRAY park_ids LOOP
+            RAISE NOTICE 'Парк %: обнаружены обновленные фонари. Расчеты пропущены.', current_park_id;
+        END LOOP;
+    END IF;
+
+    -- Вставка статистики для парков без обновлений
+    WITH filtered_parks AS (
+        SELECT p.id
+        FROM parks p
+        WHERE NOT EXISTS (
+            SELECT 1 
+            FROM lanterns l 
+            WHERE l.park_id = p.id 
+            AND l.is_updated = TRUE
+        )
+    ),
+    lantern_data AS (
+        SELECT
+            l.park_id,
+            l.id AS lantern_id,
+            l.max_capacity / 1000.0 AS max_energy_expenditure,
+            COALESCE(COUNT(sr.id), 0) AS trigger_count_last_hour,
+            l.active_time,
+            l.base_brightness,
+            l.active_brightness,
+            l.max_capacity
+        FROM lanterns l
+        LEFT JOIN sensor_responses sr
+            ON l.id = sr.lantern_id
+            AND sr.date >= NOW() - INTERVAL '1 HOUR'
+        GROUP BY l.id
+    ),
+    calculated_energy AS (
+        SELECT
+            ld.park_id,
+            SUM(
+                ((3600 - (trigger_count_last_hour * active_time)) * max_capacity * base_brightness / 100 +
+                (trigger_count_last_hour * active_time) * max_capacity * active_brightness / 100) / 3600000.0
+            ) AS energy_expended,
+            SUM(max_energy_expenditure) AS max_energy_expenditure
+        FROM lantern_data ld
+        GROUP BY ld.park_id
+    )
+    INSERT INTO statistics_hourly (park_id, energy_expended, max_energy_expenditure, date)
+    SELECT
+        ce.park_id,
+        ROUND(ce.energy_expended::numeric, 4)::float4,
+        ROUND(ce.max_energy_expenditure::numeric, 4)::float4,
+        NOW()
+    FROM calculated_energy ce
+    JOIN filtered_parks fp ON ce.park_id = fp.id
+    ON CONFLICT (park_id, date)
+    DO UPDATE SET
+        energy_expended = EXCLUDED.energy_expended,
+        max_energy_expenditure = EXCLUDED.max_energy_expenditure;
+
+    -- Сброс флагов обновления
+    IF park_ids IS NOT NULL THEN
+        UPDATE lanterns l
+        SET is_updated = FALSE
+        WHERE l.park_id = ANY(park_ids);
+    END IF;
+END;
+
+Код формування статистики Park statistics
+park = db.query(Park).filter(Park.id == park_id).first()
+if not park:
+    raise HTTPException(status_code=404, detail="Park not found")
+
+# Fetch activated lanterns
+activated_lanterns = db.execute(
+    text("SELECT * FROM get_top_activated_lanterns(:park_id)"), {"park_id": park_id}
+)
+columns = ["id", "activation_count"]
+formatted_activated_lanterns = [
+    dict(zip(columns, row)) for row in activated_lanterns.fetchall()
+]
+
+# Fetch lanterns needing renovation
+needing_renovation = db.execute(
+    text("SELECT * FROM get_lanterns_needing_renovation(:park_id)"),
+    {"park_id": park_id},
+)
+columns = ["id", "last_renovation_date"]
+formatted_needing_renovation = [
+    dict(zip(columns, row)) for row in needing_renovation.fetchall()
+]
+
+# Fetch planned renovations
+planned_renovations = db.execute(
+    text("SELECT * FROM get_planned_renovations(:park_id)"),
+    {"park_id": park_id},
+)
+columns = ["id", "lantern_id", "date"]
+formatted_planned_renovations = [
+    dict(zip(columns, row)) for row in planned_renovations.fetchall()
+]
+
+avg_seconds = get_avg_repair_time(db, park_id)
+formatted_time = seconds_to_days_hours(avg_seconds)
+
+def get_avg_repair_time(db: Session, park_id: int) -> float:
+    query = text(
+        """
+        WITH ranked_renovations AS (
+            SELECT 
+                b.id AS breakdown_id,
+                b.date AS breakdown_date,
+                r.date AS renovation_date,
+                ROW_NUMBER() OVER (
+                    PARTITION BY b.id 
+                    ORDER BY r.date - b.date ASC
+                ) AS rn
+            FROM breakdowns b
+            LEFT JOIN renovations r 
+                ON b.lantern_id = r.lantern_id 
+                AND r.status = 'completed'
+                AND r.date >= b.date
+            JOIN lanterns l ON b.lantern_id = l.id
+           WHERE l.park_id = :park_id
+        )
+        SELECT 
+            AVG(EXTRACT(EPOCH FROM (renovation_date - breakdown_date))) 
+        FROM ranked_renovations
+        WHERE rn = 1;
+    """
+    )
+    result = db.execute(query, {"park_id": park_id})
+    avg_seconds = result.scalar()
+    return avg_seconds if avg_seconds else 0.0
+
+def seconds_to_days_hours(seconds: float) -> str:
+    if not seconds:
+        return "Немає даних для розрахунку"
+
+    days = int(seconds // 86400)
+    remaining_seconds = seconds % 86400
+    hours = int(remaining_seconds // 3600)
+
+    if days == 1:
+        day_str = "день"
+    elif 2 <= days <= 4:
+        day_str = "дні"
+    else:
+        day_str = "днів"
+
+    if hours == 1:
+        hour_str = "година"
+    elif 2 <= hours <= 4:
+        hour_str = "години"
+    else:
+        hour_str = "годин"
+
+    return f"{days} {day_str} {hours} {hour_str}"
+
+Код формування статистики Efficiency statistics
+park_filtration = ""
+
+if park_id:
+    park = db.query(Park).filter(Park.id == park_id).first()
+    if not park:
+        raise HTTPException(status_code=404, detail="Park not found")
+    park_filtration = "WHERE s1.park_id = :park_id"
+
+total_energy_consumption = energy_consumption(db, park_filtration, park_id)
+avg_savings_percent, avg_savings = energy_savings(db, park_filtration, park_id)
+savings_in_money = f"{round(avg_savings * energy_cost, 4)} грн/кВт∙год"
+
+def energy_consumption(db: Session, park_filtration: str, park_id: int):
+    query = """
+    SELECT SUM(s1.energy_expended)
+    FROM statistics_hourly s1
+    JOIN (
+        SELECT park_id, MAX(date) AS max_date
+        FROM statistics_hourly
+        GROUP BY park_id
+    ) s2
+    ON s1.park_id = s2.park_id AND s1.date = s2.max_date"""
+
+    energy_expended = db.execute(
+        text(f"{query} {park_filtration};"), {"park_id": park_id}
+    ).scalar()
+
+    return f"{energy_expended} кВт·год"
+
+def energy_savings(db: Session, park_filtration: str, park_id: int):
+    expended = retrieve_value_from_db("energy_expended", db, park_filtration, park_id)
+    max_expenditure = retrieve_value_from_db(
+        "max_energy_expenditure", db, park_filtration, park_id
+    )
+
+    avg_savings = max_expenditure - expended
+    avg_savings_percent = int((1 - expended / max_expenditure) * 100)
+
+    return f"{avg_savings_percent}%", avg_savings
+
+
+def retrieve_value_from_db(
+    db_variable: str, db: Session, park_filtration: str, park_id: int
+):
+    query = f"""
+    SELECT SUM(s1.{db_variable})
+    FROM statistics_hourly s1
+    JOIN (
+        SELECT park_id, MAX(date) AS max_date
+        FROM statistics_hourly
+        GROUP BY park_id
+    ) s2
+    ON s1.park_id = s2.park_id AND s1.date = s2.max_date"""
+
+    execute_query = db.execute(
+        text(f"{query} {park_filtration};"), {"park_id": park_id}
+    ).scalar()
+
+    return execute_query
 
