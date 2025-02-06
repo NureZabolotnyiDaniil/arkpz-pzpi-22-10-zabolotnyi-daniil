@@ -1,1 +1,570 @@
+Харківський національний університет радіоелектроніки
+
+Кафедра програмної інженерії
+
+
+
+
+
+
+Звіт
+З Лабораторної роботи № 2.
+«Розробка бази даних для серверної частини програмної системи та прикладного програмного інтерфейсу (API)»
+з дисципліни «Аналіз та Рефакторинг коду» 
+
+
+
+
+
+
+Виконав:                ст. гр. ПЗПІ 22-10  Заболотний Д.М.		Перевірив:
+Дашенков Д. С.
+
+
+
+
+
+
+Харків 2024
+1. Інженерні рішення
+У проєкті для управління користувачами використовується система керування базами даних PostgreSQL. Для авторизації застосовується механізм JWT-токенів, що забезпечує безпечний доступ користувачів до системи. Паролі користувачів шифруються перед збереженням, що підвищує рівень безпеки даних.
+Для обміну даними між IoT-пристроями та серверною частиною використовується протокол HTTP. Це дозволяє пристроям надсилати інформацію про стан, отримувати налаштування та повідомляти про події руху в режимі реального часу.
+
+2. Use-Case діаграма серверної частини 
+ 
+Рисунок 2.1 – Use-Case діаграма серверної частини
+3. Специфікація API (див. Додаток А)
+4. Структура БД
+ 
+Рисунок 4.1 – ER діаграма бази даних
+ 
+Рисунок 4.2 – Структура бази даних
+
+Відео-звіт: https://youtu.be/IL6cbXVnhcM
+
+Додаток А
+Специфікація API 
+1. Admin
+POST Register admin
+URL
+http://localhost/api/admin/register
+Method
+POST
+Description
+Реєструє нового адміністратора.
+Request Body (raw, JSON)
+{
+  "first_name": "Ім'я",
+  "surname": "Прізвище",
+  "email": "admin@example.com",
+  "password": "securepassword"
+}
+Example Request (cURL)
+curl -s -L 'http://localhost/api/admin/register' \
+  -H 'Content-Type: application/json' \
+  --data-raw '{
+    "first_name": "Ім'я",
+    "surname": "Прізвище",
+    "email": "admin@example.com",
+    "password": "securepassword"
+}'
+Successful Response
+Status: 200 OK
+Response Body (JSON):
+{
+  "message": "User registered successfully"
+}
+
+POST Login admin
+URL
+http://localhost/api/admin/login
+Method
+POST
+Description
+Аутентифікує адміністратора та повертає JWT токен для подальшої авторизації.
+Request Body (raw, JSON)
+{
+  "email": "admin@example.com",
+  "password": "securepassword"
+}
+Example Request (cURL)
+curl -s -L 'http://localhost/api/admin/login' \
+  -H 'Content-Type: application/json' \
+  --data-raw '{
+    "email": "admin@example.com",
+    "password": "securepassword"
+}'
+Successful Response
+Status: 200 OK
+Response Body (JSON):
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJh...",
+  "token_type": "bearer"
+}
+
+GET Get admins list
+URL
+http://localhost/api/admin/list
+Method
+GET
+Description
+Отримує список усіх адміністраторів.
+Запит вимагає автентифікації – поточний адміністратор (current_admin).
+Authentication
+Bearer Token має бути переданий в заголовку запиту.
+Example Request (cURL)
+curl -s -L 'http://localhost/api/admin/list' \
+  -H 'Authorization: Bearer <your_access_token>'
+Successful Response
+Status: 200 OK
+Response Body (JSON):
+[
+  {
+    "id": 1,
+    "first_name": "Іван",
+    "surname": "Іванов",
+    "email": "ivanov@example.com",
+    "status": "active",
+    "rights": "restricted_access"
+  },
+  {
+    "id": 2,
+    "first_name": "Петро",
+    "surname": "Петров",
+    "email": "petrov@example.com",
+    "status": "inactive",
+    "rights": "full"
+  }
+]
+
+PUT Update admin info
+URL
+http://localhost/api/admin/edit
+Method
+PUT
+Description
+Оновлює інформацію поточного адміністратора.
+Запит вимагає автентифікації (current_admin).
+Authentication
+Bearer Token має бути переданий в заголовку запиту.
+Request Body (raw, JSON)
+{
+  "first_name": "Новe_Ім'я",
+  "surname": "Новe_Прізвище",
+  "email": "new_admin@example.com",
+  "password": "newsecurepassword"
+}
+Всі поля в цьому запиті є опціональними. Ви можете передавати лише ті, які необхідно змінити.
+Example Request (cURL)
+curl -s -L -X PUT 'http://localhost/api/admin/edit' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <your_access_token>' \
+  --data-raw '{
+    "first_name": "Новe_Ім'я",
+    "surname": "Новe_Прізвище",
+    "email": "new_admin@example.com",
+    "password": "newsecurepassword"
+}'
+Successful Response
+Status: 200 OK
+Response Body (JSON):
+{
+  "id": 1,
+  "first_name": "Новe_Ім'я",
+  "surname": "Новe_Прізвище",
+  "email": "new_admin@example.com",
+  "status": "active",
+  "rights": "restricted_access"
+}
+
+PUT Update admin status
+URL
+http://localhost/api/admin/update_status/{admin_email}
+Method
+PUT
+Description
+Оновлює статус та права доступу адміністратора за його email.
+Запит вимагає прав повного доступу (full_access_admin).
+Path Parameters
+•	admin_email (string) — Email адміністратора, статус якого необхідно оновити.
+Authentication
+Bearer Token має бути переданий в заголовку запиту.
+Request Body (raw, JSON)
+{
+  "status": "active",
+  "rights": "restricted_access"
+}
+За замовчуванням: status = "active", rights = "restricted_access".
+Example Request (cURL)
+curl -s -L -X PUT 'http://localhost/api/admin/update_status/admin@example.com' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <your_full_access_token>' \
+  --data-raw '{
+    "status": "active",
+    "rights": "restricted_access"
+}'
+Successful Response
+Status: 200 OK
+Response Body (JSON):
+{
+  "id": 2,
+  "first_name": "Ім'я_адміністратора",
+  "surname": "Прізвище_адміністратора",
+  "email": "admin@example.com",
+  "status": "active",
+  "rights": "restricted_access"
+}
+
+DELETE Delete admin
+URL
+http://localhost/api/admin/delete/{admin_id}
+Method
+DELETE
+Description
+Видаляє адміністратора за його ID.
+Запит вимагає прав повного доступу (full_access_admin).
+Path Parameters
+•	admin_id (integer) — ID адміністратора, якого потрібно видалити.
+Authentication
+Bearer Token має бути переданий в заголовку запиту.
+Example Request (cURL)
+curl -s -L -X DELETE 'http://localhost/api/admin/delete/2' \
+  -H 'Authorization: Bearer <your_full_access_token>'
+Successful Response
+Status: 200 OK
+Response Body (JSON):
+{
+  "id": 2,
+  "first_name": "Ім'я_адміністратора",
+  "surname": "Прізвище_адміністратора",
+  "email": "admin@example.com",
+  "status": "active",
+  "rights": "restricted_access"
+}
+
+ 
+2. Lantern
+POST Додати ліхтар
+URL
+http://localhost/api/lantern/add
+Метод
+POST
+Опис
+Створює новий ліхтар з базовими характеристиками.
+Параметри запиту (Query Parameters)
+•	base_brightness (integer, обов’язковий)
+Опис: Базова яскравість (діапазон 0-100%).
+Обмеження: значення від 0 до 100.
+За замовчуванням: 0.
+•	active_brightness (integer, обов’язковий)
+Опис: Активна яскравість (діапазон 0-100%).
+Обмеження: значення від 0 до 100.
+За замовчуванням: 0.
+•	active_time (integer, обов’язковий)
+Опис: Час роботи в активному режимі в секундах (значення більше або рівне 5 секунд).
+Обмеження: мінімальне значення 5.
+За замовчуванням: 5.
+•	status (LanternStatus, необов’язковий)
+Опис: Статус ліхтаря.
+Можливі значення: "working" або "maintenance".
+За замовчуванням: "working".
+•	park_id (integer, необов’язковий)
+Опис: Ідентифікатор парку, до якого належить ліхтар.
+Аутентифікація
+Запит вимагає аутентифікації. Передавайте Bearer Token у заголовку Authorization.
+Приклад запиту (cURL)
+curl -s -L 'http://localhost/api/lantern/add?base_brightness=50&active_brightness=80&active_time=10&status=working&park_id=3' \
+  -H 'Authorization: Bearer <your_access_token>'
+Успішна відповідь
+Статус: 200 OK
+Тіло відповіді (JSON):
+{
+  "message": "Lantern created successfully"
+}
+
+GET Список ліхтарів
+URL
+http://localhost/api/lantern/list
+Метод
+GET
+Опис
+Повертає список усіх ліхтарів.
+Аутентифікація
+Запит вимагає аутентифікації. Передавайте Bearer Token у заголовку Authorization.
+Приклад запиту (cURL)
+curl -s -L 'http://localhost/api/lantern/list' \
+  -H 'Authorization: Bearer <your_access_token>'
+Успішна відповідь
+Статус: 200 OK
+Тіло відповіді (JSON):
+[
+  {
+    "id": 1,
+    "base_brightness": 50,
+    "active_brightness": 80,
+    "active_time": 10,
+    "status": "working",
+    "park_id": 3
+  },
+  {
+    "id": 2,
+    "base_brightness": 30,
+    "active_brightness": 60,
+    "active_time": 15,
+    "status": "maintenance",
+    "park_id": null
+  }
+]
+
+GET Отримати дані ліхтаря за ідентифікатором
+URL
+http://localhost/api/lantern/lantern/{lantern_id}
+Метод
+GET
+Опис
+Повертає інформацію про конкретний ліхтар за його ідентифікатором.
+Параметри шляху (Path Parameters)
+•	lantern_id (integer, обов’язковий)
+Опис: Ідентифікатор ліхтаря.
+Аутентифікація
+Запит вимагає аутентифікації. Передавайте Bearer Token у заголовку Authorization.
+Приклад запиту (cURL)
+curl -s -L 'http://localhost/api/lantern/lantern/1' \
+  -H 'Authorization: Bearer <your_access_token>'
+Успішна відповідь
+Статус: 200 OK
+Тіло відповіді (JSON):
+{
+  "id": 1,
+  "base_brightness": 50,
+  "active_brightness": 80,
+  "active_time": 10,
+  "status": "working",
+  "park_id": 3
+}
+
+PUT Оновити дані ліхтаря
+URL
+http://localhost/api/lantern/update/{lantern_id}
+Метод
+PUT
+Опис
+Оновлює дані існуючого ліхтаря.
+Параметри шляху (Path Parameters)
+•	lantern_id (integer, обов’язковий)
+Опис: Ідентифікатор ліхтаря, який необхідно оновити.
+Параметри запиту (Query Parameters)
+•	base_brightness (integer, необов’язковий)
+Опис: Базова яскравість (діапазон 0-100%).
+Обмеження: значення від 0 до 100.
+•	active_brightness (integer, необов’язковий)
+Опис: Активна яскравість (діапазон 0-100%).
+Обмеження: значення від 0 до 100.
+•	active_time (integer, необов’язковий)
+Опис: Час роботи в активному режимі в секундах (мінімум 5 секунд).
+Обмеження: мінімальне значення 5.
+•	status (LanternStatus, необов’язковий)
+Опис: Статус ліхтаря. Можливі значення: "working" або "maintenance".
+•	park_id (integer, необов’язковий)
+Опис: Ідентифікатор парку. Щоб скинути значення, передайте 0.
+Аутентифікація
+Запит вимагає аутентифікації. Передавайте Bearer Token у заголовку Authorization.
+Приклад запиту (cURL)
+curl -s -L -X PUT 'http://localhost/api/lantern/update/1?base_brightness=55&active_brightness=85&active_time=12&status=working&park_id=3' \
+  -H 'Authorization: Bearer <your_access_token>'
+Успішна відповідь
+Статус: 200 OK
+Тіло відповіді (JSON):
+{
+  "id": 1,
+  "base_brightness": 55,
+  "active_brightness": 85,
+  "active_time": 12,
+  "status": "working",
+  "park_id": 3
+}
+
+DELETE Видалити ліхтар
+URL
+http://localhost/api/lantern/delete/{lantern_id}
+Метод
+DELETE
+Опис
+Видаляє ліхтар за його ідентифікатором.
+Параметри шляху (Path Parameters)
+•	lantern_id (integer, обов’язковий)
+Опис: Ідентифікатор ліхтаря, який необхідно видалити.
+Аутентифікація
+Запит вимагає аутентифікації. Передавайте Bearer Token у заголовку Authorization.
+Приклад запиту (cURL)
+curl -s -L -X DELETE 'http://localhost/api/lantern/delete/1' \
+  -H 'Authorization: Bearer <your_access_token>'
+Успішна відповідь
+Статус: 200 OK
+Тіло відповіді (JSON):
+{
+  "id": 1,
+  "base_brightness": 55,
+  "active_brightness": 85,
+  "active_time": 12,
+  "status": "working",
+  "park_id": 3
+}
+
+ 
+3. Breakdown
+POST Додати запис про поломку
+URL
+http://localhost/api/breakdown/add
+Метод
+POST
+Опис
+Створює новий запис про поломку для ліхтаря.
+Параметри запиту (Query Parameters)
+•	lantern_id (integer, обов’язковий)
+Опис: Зовнішній ключ таблиці lanterns.
+•	date (string, необов’язковий, за замовчуванням поточна дата)
+Формат: YYYY-MM-DD
+Приклад: "2025-02-06"
+•	time (string, необов’язковий, за замовчуванням поточний час)
+Формат: HH:MM
+Приклад: "15:30"
+•	description (string, необов’язковий)
+Опис: Опис поломки.
+Аутентифікація
+Запит вимагає аутентифікації. Передавайте Bearer Token у заголовку Authorization.
+Приклад запиту (cURL)
+curl -s -L 'http://localhost/api/breakdown/add?lantern_id=123&date=2025-02-06&time=15:30&description=Несправний%20ламповий%20модуль' \
+  -H 'Authorization: Bearer <your_access_token>'
+Успішна відповідь
+Статус: 200 OK
+Тіло відповіді (JSON):
+{
+  "message": "Breakdown added successfully"
+}
+Відповідь при помилці
+При некоректному форматі дати або часу сервер повертає:
+•	Статус: 400 Bad Request
+•	Тіло відповіді (JSON): 
+{
+  "detail": "Invalid date or time format. Expected formats are %Y-%m-%d and %H:%M respectively."
+}
+
+GET Список записів про поломки
+URL
+http://localhost/api/breakdown/list
+Метод
+GET
+Опис
+Повертає список усіх записів про поломки.
+Запит вимагає аутентифікації (current_admin).
+Аутентифікація
+Передавайте Bearer Token у заголовку Authorization.
+Приклад запиту (cURL)
+curl -s -L 'http://localhost/api/breakdown/list' \
+  -H 'Authorization: Bearer <your_access_token>'
+Успішна відповідь
+Статус: 200 OK
+Тіло відповіді (JSON):
+[
+  {
+    "id": 1,
+    "lantern_id": 123,
+    "date": "2025-02-06 15:30",
+    "description": "Несправний ламповий модуль"
+  },
+  {
+    "id": 2,
+    "lantern_id": 124,
+    "date": "2025-02-05 12:45",
+    "description": "Відмова живлення"
+  }
+]
+Примітка: Поле date повертається у вигляді рядка, відформатованого за шаблоном "YYYY-MM-DD HH:MM".
+
+GET Отримати інформацію про запис про поломку
+URL
+http://localhost/api/breakdown/info/{breakdown_id}
+Метод
+GET
+Опис
+Повертає інформацію про конкретний запис про поломку за його ідентифікатором.
+Параметри шляху (Path Parameters)
+•	breakdown_id (integer, обов’язковий)
+Опис: Ідентифікатор запису про поломку.
+Аутентифікація
+Запит вимагає аутентифікації. Передавайте Bearer Token у заголовку Authorization.
+Приклад запиту (cURL)
+curl -s -L 'http://localhost/api/breakdown/info/1' \
+  -H 'Authorization: Bearer <your_access_token>'
+Успішна відповідь
+Статус: 200 OK
+Тіло відповіді (JSON):
+{
+  "id": 1,
+  "lantern_id": 123,
+  "date": "2025-02-06 15:30",
+  "description": "Несправний ламповий модуль"
+}
+
+PUT Оновити запис про поломку
+URL
+http://localhost/api/breakdown/update/{breakdown_id}
+Метод
+PUT
+Опис
+Оновлює дані існуючого запису про поломку.
+Параметри шляху (Path Parameters)
+•	breakdown_id (integer, обов’язковий)
+Опис: Ідентифікатор запису про поломку, який необхідно оновити.
+Параметри запиту (Query Parameters)
+•	lantern_id (integer, необов’язковий)
+Опис: Зовнішній ключ таблиці lanterns.
+•	date (string, необов’язковий)
+Формат: YYYY-MM-DD
+Приклад: "2025-02-06"
+•	time (string, необов’язковий)
+Формат: HH:MM
+Приклад: "15:30"
+•	description (string, необов’язковий)
+Опис: Опис поломки. Щоб скинути значення, можна передати рядок "none".
+Аутентифікація
+Запит вимагає аутентифікації. Передавайте Bearer Token у заголовку Authorization.
+Приклад запиту (cURL)
+curl -s -L -X PUT 'http://localhost/api/breakdown/update/1?lantern_id=125&date=2025-02-07&time=16:00&description=Замена%20лампи' \
+  -H 'Authorization: Bearer <your_access_token>'
+Успішна відповідь
+Статус: 200 OK
+Тіло відповіді (JSON):
+{
+  "id": 1,
+  "lantern_id": 125,
+  "date": "2025-02-07 16:00",
+  "description": "Зміна ліхтаря"
+}
+
+DELETE Видалити запис про поломку
+URL
+http://localhost/api/breakdown/delete/{breakdown_id}
+Метод
+DELETE
+Опис
+Видаляє запис про поломку за його ідентифікатором.
+Параметри шляху (Path Parameters)
+•	breakdown_id (integer, обов’язковий)
+Опис: Ідентифікатор запису про поломку, який необхідно видалити.
+Аутентифікація
+Запит вимагає аутентифікації. Передавайте Bearer Token у заголовку Authorization.
+Приклад запиту (cURL)
+curl -s -L -X DELETE 'http://localhost/api/breakdown/delete/1' \
+  -H 'Authorization: Bearer <your_access_token>'
+Успішна відповідь
+Статус: 200 OK
+Тіло відповіді (JSON):
+{
+  "id": 1,
+  "lantern_id": 125,
+  "date": "2025-02-07 16:00",
+  "description": "Зміна ліхтаря"
+}
 
